@@ -50,6 +50,7 @@ export interface Options {
   dataVarname: string;
   autoescape: boolean;
   useWith: boolean;
+  cache: boolean;
 }
 
 export class Environment {
@@ -90,7 +91,10 @@ export class Environment {
       }
 
       const template = this.compile(source, file);
-      this.cache.set(file, template);
+
+      if (this.options.cache) {
+        this.cache.set(file, template);
+      }
 
       return await template(data);
     }
@@ -183,19 +187,24 @@ export class Environment {
   async load(file: string, from?: string): Promise<Template> {
     const path = from ? this.options.loader.resolve(from, file) : file;
 
-    if (!this.cache.has(path)) {
-      // Remove query and hash params from path before loading
-      const cleanPath = path
-        .split("?")[0]
-        .split("#")[0];
-
-      const { source, data } = await this.options.loader.load(cleanPath);
-      const template = this.compile(source, path, data);
-
-      this.cache.set(path, template);
+    if (this.cache.has(path)) {
+      return this.cache.get(path)!;
     }
 
-    return this.cache.get(path)!;
+    // Remove query and hash params from path before loading
+    const cleanPath = path
+      .split("?")[0]
+      .split("#")[0];
+
+    const { source, data } = await this.options.loader.load(cleanPath);
+    const template = this.compile(source, path, data);
+
+    if (this.options.cache) {
+      this.cache.set(path, template);
+      return this.cache.get(path)!;
+    }
+
+    return template;
   }
 
   compileTokens(
